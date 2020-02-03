@@ -12,7 +12,7 @@ import io
 
 
 class AudiocodeSSH (BaseConnection):
-	"""Common Methods for AudioCodes running 7.2 CLI (both SSH and telnet)."""
+	"""Common Methods for AudioCodes running 7.2 CLI for SSH."""
 
 	def session_preparation(self):
 		"""Prepare the session after the connection has been established."""
@@ -171,35 +171,62 @@ class AudiocodeSSH (BaseConnection):
 
 	def disable_window_paging(
 		self, 
-		delay_factor=1,
-		disable_window_config = ["cli-settings","window-height 0","exit"]
+		disable_window_config = ["cli-settings","window-height 0","exit"],
+		config_mode = "config system",
+		delay_factor=.5
 	):
-		"""This is designed to disable window paging which prevents paged command output
-		from breaking the script"""
+		"""This is designed to disable window paging which prevents paged command 
+		output from breaking the script.
 		
+		:param disable_window_config: Command, or list of commands, to execute.
+		:type disable_window_config: str
+		
+		:param config_mode: Configuration mode in which commands should be executed.
+		:type config_mode: str
+		
+		:param delay_factor: See __init__: global_delay_factor
+		:type delay_factor: int
+		
+		"""
+		
+		self.enable()
 		delay_factor = self.select_delay_factor(delay_factor)
+		config_mode = config_mode
 		time.sleep(delay_factor * 0.1)
 		self.clear_buffer()
 		disable_window_config = disable_window_config
 		log.debug("In disable_paging")
 		log.debug(f"Commands: {disable_window_config}")
-		self.send_config_set(disable_window_config,True,.25,150,False,False,"config system")
+		self.send_config_set(disable_window_config,True,.25,150,False,False,config_mode)
 		log.debug("Exiting disable_paging")
 
 		
 	def enable_window_paging(
 		self, 
-		delay_factor=1,
-		enable_window_config = ["cli-settings","window-height automatic","exit"]
+		enable_window_config = ["cli-settings","window-height automatic","exit"],
+		config_mode = "config system",
+		delay_factor=.5
 	):
-		"""This is designed to reenable window paging"""
+		"""This is designed to reenable window paging
+		
+		:param enable_window_config: Command, or list of commands, to execute.
+		:type enable_window_config: str
+		
+		:param config_mode: Configuration mode in which commands should be executed.
+		:type config_mode: str
+		
+		:param delay_factor: See __init__: global_delay_factor
+		:type delay_factor: int
+		
+		"""
 		delay_factor = self.select_delay_factor(delay_factor)
+		config_mode = config_mode
 		time.sleep(delay_factor * 0.1)
 		self.clear_buffer()
 		enable_window_config = enable_window_config
 		log.debug("In enable_paging")
 		log.debug(f"Commands: {enable_window_config}")
-		self.send_config_set(enable_window_config,True,.25,150,False,False,"config system")
+		self.send_config_set(enable_window_config,True,.25,150,False,False,config_mode)
 		log.debug("Exiting enable_paging")
 
 	def save_config(self, cmd="write", confirm=False, confirm_response=""):
@@ -248,10 +275,10 @@ class AudiocodeSSH (BaseConnection):
 		:type cmd_no_save: str
 
 		"""
-		self.reload_device = reload_device
-		self.reload_save = reload_save
-		self.cmd_save = cmd_save
-		self.cmd_no_save = cmd_no_save
+		reload_device = reload_device
+		reload_save = reload_save
+		cmd_save = cmd_save
+		cmd_no_save = cmd_no_save
 		self.enable()
 		
 		if reload_device == True and reload_save == True:
@@ -268,6 +295,7 @@ class AudiocodeSSH (BaseConnection):
 	def device_terminal_exit(self):
 		"""This is for accessing devices via terminal. It first reenables window paging for
 		future use and exits the device before you send the disconnect method"""
+		
 		self.enable_window_paging()
 		output = self.send_command_timing('exit')
 		return (output)
@@ -276,110 +304,66 @@ class AudiocodeSSH (BaseConnection):
 		"""Not a configurable parameter"""
 		pass
 
-	def telnet_login(
-		self,
-		pri_prompt_terminator1=">",
-		pri_prompt_terminator2="#",
-		alt_prompt_terminator1="*>",
-		alt_prompt_terminator2="*#",
-		username_pattern=r"(?:user:|username|login|user name)",
-		pwd_pattern=r"assword",
-		delay_factor=1,
-		max_loops=20,
-	):
-		"""Telnet login. Can be username/password or just password."""
-		delay_factor = self.select_delay_factor(delay_factor)
-		time.sleep(1 * delay_factor)
-
-		output = ""
-		return_msg = ""
-		i = 1
-		while i <= max_loops:
-			try:
-				output = self.read_channel()
-				return_msg += output
-
-				# Search for username pattern / send username
-				if re.search(username_pattern, output, flags=re.I):
-					self.write_channel(self.username + self.TELNET_RETURN)
-					time.sleep(1 * delay_factor)
-					output = self.read_channel()
-					return_msg += output
-
-				# Search for password pattern / send password
-				if re.search(pwd_pattern, output, flags=re.I):
-					self.write_channel(self.password + self.TELNET_RETURN)
-					time.sleep(0.5 * delay_factor)
-					output = self.read_channel()
-					return_msg += output
-					if re.search(
-							pri_prompt_terminator, output, flags=re.M
-					) or re.search(alt_prompt_terminator, output, flags=re.M):
-						return return_msg
-
-				# Support direct telnet through terminal server
-				if re.search(r"initial configuration dialog\? \[yes/no\]: ", output):
-					self.write_channel("no" + self.TELNET_RETURN)
-					time.sleep(0.5 * delay_factor)
-					count = 0
-					while count < 15:
-						output = self.read_channel()
-						return_msg += output
-						if re.search(r"ress RETURN to get started", output):
-							output = ""
-							break
-						time.sleep(2 * delay_factor)
-						count += 1
-
-				# Check for device with no password configured
-				if re.search(r"assword required, but none set", output):
-					self.remote_conn.close()
-					msg = "Login failed - Password required, but none set: {}".format(
-						self.host
-					)
-					raise NetMikoAuthenticationException(msg)
-
-				# Check if proper data received
-				if re.search(pri_prompt_terminator1, output, flags=re.M) or re.search(pri_prompt_terminator2, output, flags=re.M) or re.search(
-						alt_prompt_terminator1, output, flags=re.M) or re.search(alt_prompt_terminator1, output, flags=re.M):
-					return return_msg
-
-				self.write_channel(self.TELNET_RETURN)
-				time.sleep(0.5 * delay_factor)
-				i += 1
-			except EOFError:
-				self.remote_conn.close()
-				msg = "Login failed: {}".format(self.host)
-				raise NetMikoAuthenticationException(msg)
-
-		# Last try to see if we already logged in
-		self.write_channel(self.TELNET_RETURN)
-		time.sleep(0.5 * delay_factor)
-		output = self.read_channel()
-		return_msg += output
-		if re.search(pri_prompt_terminator1, output, flags=re.M) or re.search(pri_prompt_terminator2, output,flags=re.M) or re.search(
-				alt_prompt_terminator1, output, flags=re.M) or re.search(alt_prompt_terminator1, output, flags=re.M):
-			return return_msg
-
-		self.remote_conn.close()
-		msg = "Login failed: {}".format(self.host)
-		raise NetMikoAuthenticationException(msg)
-
 
 
 
 
 class AudiocodeTelnet(AudiocodeSSH):
 	"""Audiocode Telnet driver."""
-
+	
 	pass
-	
-	
-	
-class AudiocodeOldCLI(BaseConnection):
-	"""Audiocode Old CLI driver."""
 
-	pass
+	
+	
+	
+class AudiocodeOldCLI(AudiocodeSSH):
+	"""Audiocode Old CLI driver.  Common Methods that differentiate between 6.6 and the 7.2 CLI versions."""
+
+	def disable_window_paging(
+		self, 
+		disable_window_config = ["cli-terminal","set window-height 0","exit"],
+		config_mode = "config system",
+		delay_factor=.5
+	):
+		"""This is designed to disable window paging which prevents paged command 
+		output from breaking the script.
+				
+		:param disable_window_config: Command, or list of commands, to execute.
+		:type disable_window_config: str
+		
+		:param config_mode: Configuration mode in which commands should be executed.
+		:type config_mode: str
+		
+		:param delay_factor: See __init__: global_delay_factor
+		:type delay_factor: int
+		
+		"""		
+		return super(AudiocodeOldCLI, self).disable_window_paging(
+			disable_window_config=disable_window_config, config_mode=config_mode, delay_factor=delay_factor
+		)
+
+			
+	def enable_window_paging(
+		self, 
+		enable_window_config = ["cli-terminal","set window-height 100","exit"],
+		config_mode = "config system",
+		delay_factor=.5
+	):
+		"""This is designed to reenable window paging
+		
+		:param enable_window_config: Command, or list of commands, to execute.
+		:type enable_window_config: str
+		
+		:param config_mode: Configuration mode in which commands should be executed.
+		:type config_mode: str
+		
+		:param delay_factor: See __init__: global_delay_factor
+		:type delay_factor: int
+		
+		"""
+		return super(AudiocodeOldCLI, self).enable_window_paging(
+			enable_window_config=enable_window_config, config_mode=config_mode, delay_factor=delay_factor
+		)
 
 
 
