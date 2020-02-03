@@ -1,4 +1,7 @@
 from __future__ import unicode_literals
+from netmiko.base_connection import BaseConnection
+from netmiko.py23_compat import string_types
+from netmiko import log
 
 import time
 import re
@@ -6,18 +9,16 @@ import os
 import hashlib
 import io
 
-from netmiko.base_connection import BaseConnection
-from netmiko.py23_compat import string_types
-from netmiko import log
 
-class AudiocodeSSH(BaseConnection):
-	"""Common Methods for IOS (both SSH and telnet)."""
+
+class AudiocodeSSH (BaseConnection):
+	"""Common Methods for AudioCodes running 7.2 CLI (both SSH and telnet)."""
 
 	def session_preparation(self):
 		"""Prepare the session after the connection has been established."""
 		self._test_channel_read(pattern=r"[>#]")
 		self.set_base_prompt()
-		self.disable_paging()
+		self.disable_window_paging()
 		self.set_terminal_width()
 		# Clear the read buffer
 		time.sleep(0.3 * self.global_delay_factor)
@@ -35,10 +36,18 @@ class AudiocodeSSH(BaseConnection):
 		This will be set on entering user exec or privileged exec on Cisco, but not when
 		entering/exiting config mode.
 
-		:param pri_prompt_terminator: Primary trailing delimiter for identifying a device prompt
+		:param pri_prompt_terminator1: Primary trailing delimiter for identifying a device prompt
+		:type pri_prompt_terminator: str
+		
+		:param pri_prompt_terminator2: Primary trailing delimiter for identifying a device prompt
 		:type pri_prompt_terminator: str
 
-		:param alt_prompt_terminator: Alternate trailing delimiter for identifying a device prompt
+		:param alt_prompt_terminator1: Alternate trailing delimiter for identifying a device prompt
+		when pending config changes are present.
+		:type alt_prompt_terminator: str
+		
+		:param alt_prompt_terminator2: Alternate trailing delimiter for identifying a device prompt
+		when pending config changes are present.
 		:type alt_prompt_terminator: str
 
 		:param delay_factor: See __init__: global_delay_factor
@@ -56,19 +65,37 @@ class AudiocodeSSH(BaseConnection):
 		return self.base_prompt
 
 	def check_enable_mode(self, check_string="#"):
-		"""Check if in enable mode. Return boolean."""
+		"""Check if in enable mode. Return boolean.
+
+		:param check_string: Identification of privilege mode from device
+		:type check_string: str
+		"""
 		return super(AudiocodeSSH, self).check_enable_mode(
 			check_string=check_string
 		)
 
 	def enable(self, cmd="enable", pattern="ssword", re_flags=re.IGNORECASE):
-		"""Enter enable mode."""
+		"""Enter enable mode.
+
+		:param cmd: Device command to enter enable mode
+		:type cmd: str
+
+		:param pattern: pattern to search for indicating device is waiting for password
+		:type pattern: str
+
+		:param re_flags: Regular expression flags used in conjunction with pattern
+		:type re_flags: int
+		"""
 		return super(AudiocodeSSH, self).enable(
 			cmd=cmd, pattern=pattern, re_flags=re_flags
 		)
 
 	def exit_enable_mode(self, exit_command="disable"):
-		"""Exits enable (privileged exec) mode."""
+		"""Exit enable mode.
+
+		:param exit_command: Command that exits the session from privileged mode
+		:type exit_command: str
+		"""
 		return super(AudiocodeSSH, self).exit_enable_mode(
 			exit_command=exit_command
 		)
@@ -83,10 +110,10 @@ class AudiocodeSSH(BaseConnection):
 		:type pattern: str
 		"""
 		self.write_channel(self.RETURN)
-		# You can encounter an issue here (on router name changes) prefer delay-based solution
+		# If the first check_string value is not valid, it applies the second.
 
 		if not pattern:
-			output = self._read_channel_timing()
+			output = self._read_channel_timing(3)
 		else:
 			output = self.read_until_pattern(pattern=pattern)
 
@@ -99,20 +126,39 @@ class AudiocodeSSH(BaseConnection):
 	def config_mode(self, config_command="", pattern=""):
 		"""Enter into config_mode.
 
-        :param config_command: Configuration command to send to the device
-        :type config_command: str
+		:param config_command: Configuration command to send to the device
+		:type config_command: str
 
-        :param pattern: Pattern to terminate reading of channel
-        :type pattern: str
-        """
+		:param pattern: Pattern to terminate reading of channel
+		:type pattern: str
+		"""
 		output = ""
 		if not self.check_config_mode():
 			self.write_channel(self.normalize_cmd(config_command))
+			time.sleep(1)
 			output = self.read_until_pattern(pattern=pattern)
 			if not self.check_config_mode():
 				raise ValueError("Failed to enter configuration mode.")
 		return output
 
+	def exit_config_mode(self, exit_config="exit", pattern="#"):
+		"""Exit from configuration mode.
+
+		:param exit_config: Command to exit configuration mode
+		:type exit_config: str
+
+		:param pattern: Pattern to terminate reading of channel
+		:type pattern: str
+		"""
+		output = ""
+		if self.check_config_mode():
+			self.write_channel(self.normalize_cmd(exit_config))
+			output = self.read_until_pattern(pattern=pattern)
+			if self.check_config_mode():
+				raise ValueError("Failed to exit configuration mode")
+		log.debug("exit_config_mode: {}".format(output))
+		return output
+	
 	def cleanup(self):
 		"""Gracefully exit the SSH session."""
 		try:
@@ -123,43 +169,112 @@ class AudiocodeSSH(BaseConnection):
 		self._session_log_fin = True
 		self.write_channel("exit" + self.RETURN)
 
-	def save_config(self, cmd="wr", confirm=False, confirm_response=""):
-		"""Saves Config Using Copy Run Start"""
-		return super(AudiocodeSSH, self).save_config(
-			cmd=cmd, confirm=confirm, confirm_response=confirm_response
-		)
+	def disable_window_paging(
+		self, 
+		delay_factor=1,
+		disable_window_config = ["cli-settings","window-height 0","exit"]
+	):
+		"""This is designed to disable window paging which prevents paged command output
+		from breaking the script"""
+		
+		delay_factor = self.select_delay_factor(delay_factor)
+		time.sleep(delay_factor * 0.1)
+		self.clear_buffer()
+		disable_window_config = disable_window_config
+		log.debug("In disable_paging")
+		log.debug(f"Commands: {disable_window_config}")
+		self.send_config_set(disable_window_config,True,.25,150,False,False,"config system")
+		log.debug("Exiting disable_paging")
 
-	def exit_config_mode(self, exit_config="exit", pattern="#"):
-		"""Exit from configuration mode."""
-		return super(AudiocodeSSH, self).exit_config_mode(
-			exit_config=exit_config, pattern=pattern
-		)
+		
+	def enable_window_paging(
+		self, 
+		delay_factor=1,
+		enable_window_config = ["cli-settings","window-height automatic","exit"]
+	):
+		"""This is designed to reenable window paging"""
+		delay_factor = self.select_delay_factor(delay_factor)
+		time.sleep(delay_factor * 0.1)
+		self.clear_buffer()
+		enable_window_config = enable_window_config
+		log.debug("In enable_paging")
+		log.debug(f"Commands: {enable_window_config}")
+		self.send_config_set(enable_window_config,True,.25,150,False,False,"config system")
+		log.debug("Exiting enable_paging")
 
-	def disable_paging(self):
-		"""Can't be disabled this way due to enable mode requirement"""
-		pass
+	def save_config(self, cmd="write", confirm=False, confirm_response=""):
+		"""Saves the running configuration
+		
+		:param cmd: Command to save configuration
+		:type cmd: str
+		
+		:param confirm: Command if confirmation prompt is required
+		:type confirm: bool
+
+		:param confirm_response: Command if confirm response required to further script
+		:type confirm response: str
+		
+		:param confirm_response: Pattern to terminate reading of channel
+		:type confirm response: str
+		
+		"""
+		self.enable()
+		if confirm:
+			output = self.send_command_timing(command_string=cmd)
+			if confirm_response:
+				output += self.send_command_timing(confirm_response)
+			else:
+				# Send enter by default
+				output += self.send_command_timing(self.RETURN)
+		else:
+			# Some devices are slow so match on trailing-prompt if you can
+			output = self.send_command(command_string=cmd)
+
+		return (output)
+		
+	def reload_device(self, reload_device=True, reload_save=True, cmd_save="reload now", cmd_no_save="reload without-saving"):
+		"""Saves the running configuration
+		
+		:param reload_device: Boolean to determine if reload should occur.
+		:type reload_device: bool
+		
+		:param reload_device: Boolean to determine if reload with saving first should occur.
+		:type reload_device: bool
+		
+		:param cmd_save: Command to reload device with save.  Options are "reload now" and "reload if-needed".
+		:type cmd_save: str
+		
+		:param cmd_no_save: Command to reload device.  Options are "reload without-saving", "reload without-saving in [minutes]".
+		:type cmd_no_save: str
+
+		"""
+		self.reload_device = reload_device
+		self.reload_save = reload_save
+		self.cmd_save = cmd_save
+		self.cmd_no_save = cmd_no_save
+		self.enable()
+		
+		if reload_device == True and reload_save == True:
+			self.enable_window_paging()
+			output = self.send_command(command_string=cmd_save)		
+		elif reload_device == True and reload_save == False:
+			output = self.send_command(command_string=cmd_no_save)
+		else:
+			output = "***Reload not performed***"
+		
+		return (output)			
+
+
+	def device_terminal_exit(self):
+		"""This is for accessing devices via terminal. It first reenables window paging for
+		future use and exits the device before you send the disconnect method"""
+		self.enable_window_paging()
+		output = self.send_command_timing('exit')
+		return (output)
 
 	def set_terminal_width(self):
 		"""Not a configurable parameter"""
 		pass
-
-	def disconnect(self):
-		"""Try to gracefully close the SSH connection."""
-		try:
-			self.cleanup()
-			if self.protocol == "ssh":
-				self.paramiko_cleanup()
-			elif self.protocol == "telnet":
-				self.remote_conn.close()
-			elif self.protocol == "serial":
-				self.remote_conn.close()
-		except Exception:
-			# There have been race conditions observed on disconnect.
-			pass
-		finally:
-			self.remote_conn_pre = None
-			self.remote_conn = None
-			self.close_session_log()
 
 	def telnet_login(
 		self,
@@ -252,8 +367,17 @@ class AudiocodeSSH(BaseConnection):
 
 
 
+
+
 class AudiocodeTelnet(AudiocodeSSH):
-	"""Cisco IOS Telnet driver."""
+	"""Audiocode Telnet driver."""
+
+	pass
+	
+	
+	
+class AudiocodeOldCLI(BaseConnection):
+	"""Audiocode Old CLI driver."""
 
 	pass
 
