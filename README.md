@@ -10,6 +10,7 @@ How to install:
 *Simply copy and paste the new netmiko foler to your netmiko folder, select copy and replace which will override the ssh_dispatcher.py file in the root folder and add the newly created "audiocode" folder which contains the driver files.
 
 New Changes (All configurable attributes are detailed in “audiocode_ssh.py”):
+
 •	This supports both 6.6 firmware devices should call the  “audiocode_old_cli” Class in the Connection Handler.
 •	This supports both 7.2 firmware devices should call the  “audiocode_ssh” Class in the Connection Handler.
 •	Integrated the disabling/enabling Methods of the window page natively into the audiocode driver.  
