@@ -18,7 +18,7 @@ class AudiocodeSSH (BaseConnection):
 		"""Prepare the session after the connection has been established."""
 		self._test_channel_read(pattern=r"[>#]")
 		self.set_base_prompt()
-		self.disable_window_paging()
+		self.disable_paging()
 		self.set_terminal_width()
 		# Clear the read buffer
 		time.sleep(0.3 * self.global_delay_factor)
@@ -151,7 +151,7 @@ class AudiocodeSSH (BaseConnection):
 		self._session_log_fin = True
 		self.write_channel("exit" + self.RETURN)
 
-	def disable_window_paging(
+	def disable_paging(
 		self, 
 		disable_window_config = ["cli-settings","window-height 0","exit"],
 		config_mode = "config system",
@@ -183,7 +183,7 @@ class AudiocodeSSH (BaseConnection):
 		log.debug("Exiting disable_paging")
 
 		
-	def enable_window_paging(
+	def enable_paging(
 		self, 
 		enable_window_config = ["cli-settings","window-height automatic","exit"],
 		config_mode = "config system",
@@ -264,7 +264,7 @@ class AudiocodeSSH (BaseConnection):
 		self.enable()
 		
 		if reload_device == True and reload_save == True:
-			self.enable_window_paging()
+			self.enable_paging()
 			output = self.send_command(command_string=cmd_save)		
 		elif reload_device == True and reload_save == False:
 			output = self.send_command(command_string=cmd_no_save)
@@ -278,7 +278,7 @@ class AudiocodeSSH (BaseConnection):
 		"""This is for accessing devices via terminal. It first reenables window paging for
 		future use and exits the device before you send the disconnect method"""
 		
-		self.enable_window_paging()
+		self.enable_paging()
 		output = self.send_command_timing('exit')
 		return (output)
 
@@ -301,7 +301,7 @@ class AudiocodeTelnet(AudiocodeSSH):
 class AudiocodeOldCLI(AudiocodeSSH):
 	"""Audiocode Old CLI driver.  Common Methods that differentiate between 6.6 and the 7.2 CLI versions."""
 
-	def disable_window_paging(
+	def disable_paging(
 		self, 
 		disable_window_config = ["cli-terminal","set window-height 0","exit"],
 		config_mode = "config system",
@@ -320,12 +320,12 @@ class AudiocodeOldCLI(AudiocodeSSH):
 		:type delay_factor: int
 		
 		"""		
-		return super(AudiocodeOldCLI, self).disable_window_paging(
+		return super(AudiocodeOldCLI, self).disable_paging(
 			disable_window_config=disable_window_config, config_mode=config_mode, delay_factor=delay_factor
 		)
 
 			
-	def enable_window_paging(
+	def enable_paging(
 		self, 
 		enable_window_config = ["cli-terminal","set window-height 100","exit"],
 		config_mode = "config system",
@@ -343,7 +343,7 @@ class AudiocodeOldCLI(AudiocodeSSH):
 		:type delay_factor: int
 		
 		"""
-		return super(AudiocodeOldCLI, self).enable_window_paging(
+		return super(AudiocodeOldCLI, self).enable_paging(
 			enable_window_config=enable_window_config, config_mode=config_mode, delay_factor=delay_factor
 		)
 
