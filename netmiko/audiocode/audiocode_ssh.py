@@ -123,24 +123,6 @@ class AudiocodeSSH (BaseConnection):
 			check_string = ")*#"
 			return check_string in output
 
-	def config_mode(self, config_command="", pattern=""):
-		"""Enter into config_mode.
-
-		:param config_command: Configuration command to send to the device
-		:type config_command: str
-
-		:param pattern: Pattern to terminate reading of channel
-		:type pattern: str
-		"""
-		output = ""
-		if not self.check_config_mode():
-			self.write_channel(self.normalize_cmd(config_command))
-			time.sleep(1)
-			output = self.read_until_pattern(pattern=pattern)
-			if not self.check_config_mode():
-				raise ValueError("Failed to enter configuration mode.")
-		return output
-
 	def exit_config_mode(self, exit_config="exit", pattern="#"):
 		"""Exit from configuration mode.
 
