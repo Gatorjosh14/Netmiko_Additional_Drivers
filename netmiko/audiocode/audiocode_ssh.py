@@ -1,6 +1,5 @@
 from __future__ import unicode_literals
 from netmiko.base_connection import BaseConnection
-from netmiko.py23_compat import string_types
 from netmiko import log
 
 import time
@@ -24,8 +23,9 @@ class AudiocodeSSH (BaseConnection):
 		time.sleep(0.3 * self.global_delay_factor)
 		self.clear_buffer()
 
-	def set_base_prompt(self, pri_prompt_terminator1=">", pri_prompt_terminator2="#", alt_prompt_terminator1="*>",
-		alt_prompt_terminator2="*#", delay_factor=1):
+	def set_base_prompt(
+		self, pri_prompt_terminator="#", alt_prompt_terminator=">", delay_factor=1
+		):
 		"""Sets self.base_prompt
 
 		Used as delimiter for stripping of trailing prompt in output.
@@ -36,33 +36,23 @@ class AudiocodeSSH (BaseConnection):
 		This will be set on entering user exec or privileged exec on Cisco, but not when
 		entering/exiting config mode.
 
-		:param pri_prompt_terminator1: Primary trailing delimiter for identifying a device prompt
-		:type pri_prompt_terminator: str
-		
-		:param pri_prompt_terminator2: Primary trailing delimiter for identifying a device prompt
+		:param pri_prompt_terminator: Primary trailing delimiter for identifying a device prompt
 		:type pri_prompt_terminator: str
 
-		:param alt_prompt_terminator1: Alternate trailing delimiter for identifying a device prompt
-		when pending config changes are present.
-		:type alt_prompt_terminator: str
-		
-		:param alt_prompt_terminator2: Alternate trailing delimiter for identifying a device prompt
-		when pending config changes are present.
+		:param alt_prompt_terminator: Alternate trailing delimiter for identifying a device prompt
 		:type alt_prompt_terminator: str
 
 		:param delay_factor: See __init__: global_delay_factor
 		:type delay_factor: int
 		"""
 		prompt = self.find_prompt(delay_factor=delay_factor)
-		if not prompt[-2] in (alt_prompt_terminator1,alt_prompt_terminator2):
-			if not prompt[-1] in (pri_prompt_terminator1,pri_prompt_terminator2):
-				raise ValueError("Router prompt not found: {0}".format(repr(prompt)))
-		# Strip off trailing terminator
-		if alt_prompt_terminator1 or alt_prompt_terminator2 in prompt:
-			self.base_prompt = prompt[:-2]
+		pattern = rf"(\*?{pri_prompt_terminator}$|\*?{alt_prompt_terminator})$"
+		if not re.search(pattern, prompt):
+			raise ValueError(f"Router prompt not found: {repr(prompt)}")
 		else:
-			self.base_prompt = prompt[:-1]
-		return self.base_prompt
+			# Strip off trailing terminator
+			self.base_prompt = re.sub(pattern, "", prompt)
+			return self.base_prompt
 
 	def check_enable_mode(self, check_string="#"):
 		"""Check if in enable mode. Return boolean.
@@ -122,6 +112,34 @@ class AudiocodeSSH (BaseConnection):
 		else:
 			check_string = ")*#"
 			return check_string in output
+			
+	def send_config_set(
+		self,
+		config_commands=None,
+		exit_config_mode=True,
+		delay_factor=1,
+		max_loops=150,
+		strip_prompt=False,
+		strip_command=False,
+		config_mode_command=None,
+		cmd_verify=True,
+		enter_config_mode=True
+	):
+		if config_mode_command == None and enter_config_mode == True:
+			raise ValueError("For this driver config_mode_command must be specified")
+	
+		else:
+			return super(AudiocodeSSH, self).send_config_set(
+				config_commands=config_commands,
+				exit_config_mode=exit_config_mode,
+				delay_factor=delay_factor,
+				max_loops=max_loops,
+				strip_prompt=strip_prompt,
+				strip_command=strip_command,
+				config_mode_command=config_mode_command,
+				cmd_verify=cmd_verify,
+				enter_config_mode=enter_config_mode
+			)
 
 	def exit_config_mode(self, exit_config="exit", pattern="#"):
 		"""Exit from configuration mode.
