@@ -2,6 +2,7 @@
 Repository for files related to Netmiko Library specifically for Audiocode devices, both SSH and Telnet
 
 This driver was designed using the 2.4.2 version of the Netmiko Library by ktbyers, all credit goes to him for an excellent library.
+**Currently working with ktbyers to make driver compatible for release with Netmiko 3.0.0
 
 How to install:
 
