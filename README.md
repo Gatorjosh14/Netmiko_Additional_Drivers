@@ -16,11 +16,11 @@ How to install:
 
 New Changes (All configurable attributes are detailed in “audiocode_ssh.py”):
 
-•	This supports both 6.6 firmware devices should call the  “audiocode_old_cli” Class in the Connection Handler.
-•	This supports both 7.2 firmware devices should call the  “audiocode_ssh” Class in the Connection Handler.
-* The Adtran driver is called by "adtran_os" in the Connection Handler.
-•	Integrated the disabling/enabling Methods of the window page natively into the audiocode driver.  
-•	Created a new “save_config” Method for saving device configurations natively.  
-•	Created a new “reload_device” Method for saving the device configuration natively. 
-•	Created a new “device_terminal_exit” Method for gracefully exiting the device when using a terminal server. 
-•	Made further refinements in the code to make it cleaner and efficient.
+*	This supports both 6.6 firmware devices should call the  “audiocode_old_cli” Class in the Connection Handler.
+*	This supports both 7.2 firmware devices should call the  “audiocode_ssh” Class in the Connection Handler.
+*	The Adtran driver is called by "adtran_os" in the Connection Handler.
+*	Integrated the disabling/enabling Methods of the window page natively into the audiocode driver.  
+*	Created a new “save_config” Method for saving device configurations natively.  
+*	Created a new “reload_device” Method for saving the device configuration natively. 
+*	Created a new “device_terminal_exit” Method for gracefully exiting the device when using a terminal server. 
+*	Made further refinements in the code to make it cleaner and efficient.
