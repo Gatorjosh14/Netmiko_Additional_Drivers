@@ -3,7 +3,7 @@ import re
 import time
 from netmiko import log
 from netmiko.cisco_base_connection import CiscoSSHConnection, CiscoFileTransfer
-from netmiko.ssh_exception import NetmikoAuthenticationException
+from netmiko.exceptions import NetmikoAuthenticationException
 
 
 class CiscoAsaSSH(CiscoSSHConnection):
@@ -87,7 +87,21 @@ class CiscoAsaSSH(CiscoSSHConnection):
 		# Clear the read buffer
 		time.sleep(0.3 * self.global_delay_factor)
 		self.clear_buffer()
+	
+	def check_config_mode(self, check_string=")#", pattern=r"[>\#]"):
+		return super().check_config_mode(check_string=check_string, pattern=pattern)
 
+	def enable(
+		self,
+		cmd="enable",
+		pattern="ssword",
+		enable_pattern=r"\#",
+		re_flags=re.IGNORECASE,
+	):
+		return super().enable(
+			cmd=cmd, pattern=pattern, enable_pattern=enable_pattern, re_flags=re_flags
+		)
+		
 	def send_command_timing(self, *args, **kwargs):
 		"""
 		If the ASA is in multi-context mode, then the base_prompt needs to be
