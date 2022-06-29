@@ -1,7 +1,7 @@
 from __future__ import unicode_literals
 from netmiko.cisco_base_connection import CiscoBaseConnection
 from netmiko import log
-from netmiko.ssh_exception import (
+from netmiko.exceptions import (
 	NetmikoTimeoutException,
 	NetmikoAuthenticationException,
 )
@@ -20,8 +20,9 @@ class AdtranOSBase(CiscoBaseConnection):
 		self.ansi_escape_codes = True
 		self._test_channel_read()
 		#This disables log writes to console to avoid driver sync issues.
-		self.write_channel('no events' + '\r')
-		self.write_channel('\r')
+		if self.check_enable_mode():
+			self.write_channel('no events' + '\r')
+			self.write_channel('\r')
 
 		self.set_base_prompt()
 		self.disable_paging(command="terminal length 0")
@@ -311,3 +312,9 @@ class AdtranOSBase(CiscoBaseConnection):
 
 class AdtranOSSSH(AdtranOSBase):
 	pass
+
+class AdtranOSTelnet(AdtranOSBase):
+	def __init__(self, *args, **kwargs):
+		default_enter = kwargs.get("default_enter")
+		kwargs["default_enter"] = "\r\n" if default_enter is None else default_enter
+		super().__init__(*args, **kwargs)
