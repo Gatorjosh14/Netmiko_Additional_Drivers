@@ -48,7 +48,6 @@ class FortinetSSH(CiscoSSHConnection):
 			"config system console",
 			"set output standard",
 			"end",
-			"end"
 			]
 		output = self.send_config_set(disable_paging_commands,True,.25,150,False,False,None,False,False)
 		log.debug("***Window Paging Disabled***")
@@ -66,7 +65,7 @@ class FortinetSSH(CiscoSSHConnection):
 	def cleanup(self, command="quit"):
 		"""Re-enable paging globally."""
 		# Return paging state
-		enable_paging_commands = ["config global", "config system console", "set output more", "end", "end"]
+		enable_paging_commands = ["config global", "config system console", "set output more", "end"]
 		# Should test output is valid
 		output = self.send_config_set(enable_paging_commands,True,.25,150,False,False,None,False,False)
 		log.debug("***Window Paging Enabled***")
@@ -85,7 +84,7 @@ class FortinetSSH(CiscoSSHConnection):
 		"""No config mode for Fortinet devices."""
 		return ""
 
-	def exit_config_mode(self, exit_config="end", pattern1="#", pattern2="$"):
+	def exit_config_mode(self, exit_config="end", pattern1="#", pattern2="\$"):
 		"""Exit from configuration mode.
 		:param exit_config: Command to exit configuration mode
 		:type exit_config: str
@@ -93,16 +92,21 @@ class FortinetSSH(CiscoSSHConnection):
 		:type pattern: str
 		"""
 		output = ""
-		if pattern1:
-			combined_pattern = pattern1
-		if pattern2:
-			combined_pattern = r"({}|{})".format(pattern1, pattern2)
+		pattern = fr"({pattern1}|{pattern2})"
 
 		if self.check_config_mode():
 			self.write_channel(self.normalize_cmd(exit_config))
-			output = self.read_until_pattern(pattern=combined_pattern, re_flags=0)
+			output = self.read_until_pattern(pattern=pattern)
 			if self.check_config_mode():
 				raise ValueError("Failed to exit configuration mode")
+		
+		# Some older devices can freeze during Configuration pushes, this is intended to raise an error.
+		try:
+			self.write_channel(self.RETURN)
+			self.read_until_pattern(pattern=pattern)
+		except:
+			raise ValueError("Failed to Gracefully exit configuration mode - Configs could be missing")
+
 		log.debug("exit_config_mode: {}".format(output))
 		return output
 
@@ -121,12 +125,15 @@ class FortinetSSH(CiscoSSHConnection):
 		"""
 		self.write_channel(self.RETURN)
 		# You can encounter an issue here (on router name changes) prefer delay-based solution
+
 		if not pattern:
-			output = self._read_channel_timing()
+			output = self._read_channel_timing(3)
 		else:
 			output = self.read_until_pattern(pattern=pattern)
+		
+		log.debug("***check_config_mode***")
 		return check_string1 in output or check_string2 in output
-
+		
 	def save_config(self, *args, **kwargs):
 		"""Not Implemented"""
 		raise NotImplementedError
