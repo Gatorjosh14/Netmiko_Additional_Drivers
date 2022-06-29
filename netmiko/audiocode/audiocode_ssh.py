@@ -1,17 +1,13 @@
 from __future__ import unicode_literals
 from netmiko.base_connection import BaseConnection
 from netmiko import log
-from netmiko.terminal_server.terminal_server import TerminalServer
-from netmiko.ssh_exception import (
+from netmiko.exceptions import (
 	NetmikoTimeoutException,
 	NetmikoAuthenticationException,
+	ConfigInvalidException,
 )
 import time
 import re
-import os
-import hashlib
-import io
-
 
 
 class AudiocodeBaseSSH (BaseConnection):
@@ -330,6 +326,7 @@ class AudiocodeBaseSSH (BaseConnection):
 		self.enable()
 		self._enable_paging()
 		output = self.send_command_timing('exit')
+		log.debug("_device_terminal_exit executed")
 		return (output)
 
 	def set_terminal_width(self):
@@ -509,23 +506,119 @@ class AudiocodeShellSSH(AudiocodeBaseSSH):
 		strip_command=False,
 		config_mode_command=None,
 		cmd_verify=False,
-		enter_config_mode=False
+		enter_config_mode=False,
+		error_pattern="",
 	):
-		if config_mode_command == None and enter_config_mode == True:
-			raise ValueError("For this driver config_mode_command must be specified")
-	
-		else:
-			return super(AudiocodeShellSSH, self).send_config_set(
-				config_commands=config_commands,
-				exit_config_mode=exit_config_mode,
-				delay_factor=delay_factor,
-				max_loops=max_loops,
-				strip_prompt=strip_prompt,
-				strip_command=strip_command,
-				config_mode_command=config_mode_command,
-				cmd_verify=cmd_verify,
-				enter_config_mode=enter_config_mode
+		"""
+		Send configuration commands down the SSH channel.
+
+		config_commands is an iterable containing all of the configuration commands.
+		The commands will be executed one after the other.
+
+		Automatically exits/enters configuration mode.
+
+		:param config_commands: Multiple configuration commands to be sent to the device
+		:type config_commands: list or string
+
+		:param exit_config_mode: Determines whether or not to exit config mode after complete
+		:type exit_config_mode: bool
+
+		:param delay_factor: Factor to adjust delays
+		:type delay_factor: int
+
+		:param max_loops: Controls wait time in conjunction with delay_factor (default: 150)
+		:type max_loops: int
+
+		:param strip_prompt: Determines whether or not to strip the prompt
+		:type strip_prompt: bool
+
+		:param strip_command: Determines whether or not to strip the command
+		:type strip_command: bool
+
+		:param config_mode_command: The command to enter into config mode
+		:type config_mode_command: str
+
+		:param cmd_verify: Whether or not to verify command echo for each command in config_set
+		:type cmd_verify: bool
+
+		:param enter_config_mode: Do you enter config mode before sending config commands
+		:type exit_config_mode: bool
+
+		:param error_pattern: Regular expression pattern to detect config errors in the
+		output.
+		:type error_pattern: str
+		"""
+		delay_factor = self.select_delay_factor(delay_factor)
+		if config_commands is None:
+			return ""
+		elif isinstance(config_commands, str):
+			config_commands = (config_commands,)
+
+		if not hasattr(config_commands, "__iter__"):
+			raise ValueError("Invalid argument passed into send_config_set")
+
+		# Send config commands
+		output = ""
+		if enter_config_mode:
+			cfg_mode_args = (config_mode_command,) if config_mode_command else tuple()
+			output += self.config_mode(*cfg_mode_args)
+
+		# If error_pattern is perform output gathering line by line and not fast_cli mode.
+		if self.fast_cli and self._legacy_mode and not error_pattern:
+			for cmd in config_commands:
+				self.write_channel(self.normalize_cmd(cmd))
+			# Gather output
+			output += self._read_channel_timing(
+				delay_factor=delay_factor, max_loops=max_loops
 			)
+
+		elif not cmd_verify:
+			for cmd in config_commands:
+				self.write_channel(self.normalize_cmd(cmd))
+				time.sleep(delay_factor * 2)
+
+				# Gather the output incrementally due to error_pattern requirements
+				if error_pattern:
+					output += self._read_channel_timing(
+						delay_factor=delay_factor, max_loops=max_loops
+					)
+					if re.search(error_pattern, output, flags=re.M):
+						msg = f"Invalid input detected at command: {cmd}"
+						raise ConfigInvalidException(msg)
+
+			# Standard output gathering (no error_pattern)
+			if not error_pattern:
+				output += self._read_channel_timing(
+					delay_factor=delay_factor, max_loops=max_loops
+				)
+
+		else:
+			for cmd in config_commands:
+				self.write_channel(self.normalize_cmd(cmd))
+
+				# Make sure command is echoed
+				new_output = self.read_until_pattern(pattern=re.escape(cmd.strip()))
+				output += new_output
+
+				# We might capture next prompt in the original read
+				pattern = f"(?:{re.escape(self.base_prompt)}|#)"
+				if not re.search(pattern, new_output):
+					# Make sure trailing prompt comes back (after command)
+					# NX-OS has fast-buffering problem where it immediately echoes command
+					# Even though the device hasn't caught up with processing command.
+					new_output = self.read_until_pattern(pattern=pattern)
+					output += new_output
+
+				if error_pattern:
+					if re.search(error_pattern, output, flags=re.M):
+						msg = f"Invalid input detected at command: {cmd}"
+						raise ConfigInvalidException(msg)
+
+		if exit_config_mode:
+			output += self.exit_config_mode()
+		output = self._sanitize_output(output)
+		log.debug(f"{output}")
+		return output
 
 	def check_config_mode(self, check_string="/CONFiguration", pattern=""):
 		"""Checks if the device is in configuration mode or not.
@@ -641,8 +734,4 @@ class AudiocodeShellSSH(AudiocodeBaseSSH):
 class AudiocodeShellTelnet(AudiocodeShellSSH):
 	"""Audiocode this applies to 6.6 Audiocode Firmware versions that only use the Shell."""
 	pass
-
-
-
-
 
