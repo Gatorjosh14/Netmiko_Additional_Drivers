@@ -13,7 +13,7 @@ from netmiko.arista import AristaFileTransfer
 from netmiko.apresia import ApresiaAeosSSH, ApresiaAeosTelnet
 from netmiko.aruba import ArubaSSH
 from netmiko.audiocode import AudiocodeBaseSSH, Audiocode66SSH, AudiocodeShellSSH, AudiocodeBaseTelnet, Audiocode66Telnet, AudiocodeShellTelnet
-from netmiko.bash_server import BashServerSSH, BashServerTel                 
+from netmiko.bash_server import BashServerSSH, BashServerTelnet                
 from netmiko.brocade import BrocadeFOSSSH
 from netmiko.broadcom import BroadcomIcosSSH
 from netmiko.calix import CalixB6SSH, CalixB6Telnet
