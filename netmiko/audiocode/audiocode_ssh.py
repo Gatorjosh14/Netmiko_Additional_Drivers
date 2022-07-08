@@ -69,7 +69,7 @@ class AudiocodeBaseSSH (BaseConnection):
 		time.sleep(sleep_time)
 
 		# Created parent loop to counter wrong prompts due to spamming alarm logs into terminal.
-		max_loops = 5
+		max_loops = 10
 		loops = 0
 		while loops <= max_loops:
 			# Initial attempt to get prompt
@@ -96,7 +96,7 @@ class AudiocodeBaseSSH (BaseConnection):
 			if pattern:
 				if re.search(pattern, prompt):
 					break
-			elif not prompt and loops == 4:
+			elif not prompt and loops == 9:
 				raise ValueError(f"Unable to find prompt: {prompt}")
 			
 			self.write_channel(self.RETURN)
@@ -554,7 +554,7 @@ class AudiocodeShellSSH(AudiocodeBaseSSH):
 
 		:param pattern: Regular expression pattern to search for in find_prompt() call
 		"""
-		prompt = self.find_prompt(delay_factor=delay_factor)
+		prompt = self.find_prompt(delay_factor=delay_factor, pattern=pattern)
 		pattern = pri_prompt_terminator
 		if not re.search(pattern, prompt):
 			raise ValueError(f"Router prompt not found: {repr(prompt)}")
@@ -576,7 +576,7 @@ class AudiocodeShellSSH(AudiocodeBaseSSH):
 		config_commands = None,
 		exit_config_mode: bool = True,
 		read_timeout: float = None,
-		delay_factor: float = 1,
+		delay_factor: float = 1.0,
 		max_loops: int = 150,
 		strip_prompt: bool = False,
 		strip_command: bool = False,
@@ -624,7 +624,7 @@ class AudiocodeShellSSH(AudiocodeBaseSSH):
 		:param bypass_commands: Regular expression pattern indicating configuration commands
 		where cmd_verify is automatically disabled.
 		"""
-		return super(AudiocodeBaseSSH, self).send_config_set(
+		return super(AudiocodeShellSSH, self).send_config_set(
 			config_commands=config_commands,
 			exit_config_mode=exit_config_mode,
 			read_timeout=read_timeout,
@@ -653,7 +653,7 @@ class AudiocodeShellSSH(AudiocodeBaseSSH):
 		:param pattern: Pattern to terminate reading of channel
 		:type pattern: str
 		"""
-		return super(AudiocodeBaseSSH, self).check_config_mode(
+		return super(AudiocodeShellSSH, self).check_config_mode(
 			check_string=check_string, pattern=pattern, force_regex=force_regex
 		)
 
@@ -666,7 +666,7 @@ class AudiocodeShellSSH(AudiocodeBaseSSH):
 		:param pattern: Pattern to terminate reading of channel
 		:type pattern: str
 		"""
-		return super(AudiocodeBaseSSH, self).exit_config_mode(
+		return super(AudiocodeShellSSH, self).exit_config_mode(
 			exit_config=exit_config, pattern=pattern
 		)
 
@@ -742,3 +742,4 @@ class AudiocodeShellSSH(AudiocodeBaseSSH):
 class AudiocodeShellTelnet(AudiocodeShellSSH):
 	"""Audiocode this applies to 6.6 Audiocode Firmware versions that only use the Shell."""
 	pass
+
