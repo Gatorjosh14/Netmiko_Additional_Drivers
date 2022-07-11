@@ -54,7 +54,10 @@ class AudiocodeBaseSSH (BaseConnection):
 			pattern = pattern
 		)
 
-	def find_prompt(self, delay_factor = 1.0, pattern = None):
+	def find_prompt(self, 
+		delay_factor = 1.0, 
+		max_loops = 10, 
+		pattern = None):
 		"""Finds the current network device prompt, last line only.
 
 		:param delay_factor: See __init__: global_delay_factor
@@ -69,7 +72,7 @@ class AudiocodeBaseSSH (BaseConnection):
 		time.sleep(sleep_time)
 
 		# Created parent loop to counter wrong prompts due to spamming alarm logs into terminal.
-		max_loops = 10
+		max_loops = max_loops
 		loops = 0
 		while loops <= max_loops:
 			# Initial attempt to get prompt
@@ -129,12 +132,9 @@ class AudiocodeBaseSSH (BaseConnection):
 		:param check_string: Identification of privilege mode from device
 		:type check_string: str
 		"""
-		self.write_channel(self.RETURN)
-		output = self.read_until_prompt(read_entire_line=True)
-		return check_string in output
-		#return super(AudiocodeBaseSSH, self).check_enable_mode(
-		#	check_string=check_string
-		#)
+		return super(AudiocodeBaseSSH, self).check_enable_mode(
+			check_string=check_string
+		)
 
 	def cleanup(self):
 		"""Gracefully exit the SSH session."""
@@ -564,7 +564,11 @@ class AudiocodeShellSSH(AudiocodeBaseSSH):
 			return self.base_prompt
 
 	def enable(self, cmd="", pattern="", re_flags=re.IGNORECASE):
-		"""Enter enable mode."""
+		"""Not in use"""
+		pass
+
+	def check_enable_mode(self, check_string="#"):
+		"""Not in use"""
 		pass
 
 	def exit_enable_mode(self, exit_command=""):
